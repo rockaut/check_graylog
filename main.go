@@ -30,6 +30,7 @@ func init() {
         User:     "admin",
         Password: "admin",
     }
+    agent.Init(2)
 
     exitCode = 0
 }
@@ -42,7 +43,7 @@ func main() {
         fmt.Println(err)
     }
 
-    fmt.Println(res)
+    fmt.Print(res)
 
     os.Exit(exitCode)
 }
