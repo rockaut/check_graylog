@@ -1,6 +1,7 @@
 package graylog
 
 import (
+    "bytes"
     "encoding/json"
     "fmt"
     "io/ioutil"
@@ -24,7 +25,8 @@ type Agent struct {
     User     string
     Password string
 
-    token string
+    token     string
+    tokenUser string
 
     httpClient    http.Client
     httpUserAgent string
@@ -33,9 +35,8 @@ type Agent struct {
 }
 
 type loginResponse struct {
-    Name       string `json:"name"`
-    Token      string `json:"token"`
-    LastAccess string `json:"last_access"`
+    ValidUntil string `json:"valid_until"`
+    SesionID   string `json:"session_id"`
 }
 
 /*
@@ -77,21 +78,26 @@ func (agent *Agent) login() error {
         agent.Init(DefaultAgentHTTPTimeout)
     }
 
-    url := fmt.Sprintf("http://%v:%v/%v/%v/tokens/%v", agent.Host, agent.Port, "api/users", agent.User, agent.httpUserAgent)
+    url := fmt.Sprintf("http://%v:%v/api/system/sessions", agent.Host, agent.Port)
 
-    if agent.PrettyResponse {
-        url = fmt.Sprintf("%v?pretty=true", url)
-    }
-
-    req, err := http.NewRequest(http.MethodPost, url, nil)
+    loginString := fmt.Sprintf("{ \"username\":\"%v\", \"password\":\"%v\", \"host\":\"\" }", agent.User, agent.Password)
+    loginMap := []byte(loginString)
+    req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(loginMap))
     if err != nil {
         return err
     }
-
-    req.SetBasicAuth(agent.User, agent.Password)
+    req.Header.Set("Accept", "application/json")
+    req.Header.Set("Content-Type", "application/json")
 
     res, getErr := agent.httpClient.Do(req)
     if getErr != nil {
+        return err
+    }
+    if res.StatusCode != 200 {
+        err := CommonError{
+            Response: *res,
+            Request:  *req,
+        }
         return err
     }
 
@@ -99,15 +105,14 @@ func (agent *Agent) login() error {
     if readErr != nil {
         return readErr
     }
-    defer res.Body.Close()
-
     loginRes := loginResponse{}
     jsonErr := json.Unmarshal(body, &loginRes)
     if jsonErr != nil {
         return jsonErr
     }
 
-    agent.token = loginRes.Token
+    agent.token = loginRes.SesionID
+    agent.tokenUser = "session"
 
     return nil
 }
@@ -122,10 +127,14 @@ func (agent *Agent) GetSystem() (*SystemOverviewResponse, error) {
 
     if agent.User != "token" {
         if agent.token == "" {
-            agent.login()
+            err := agent.login()
+            if err != nil {
+                return nil, err
+            }
         }
     } else {
         agent.token = agent.Password
+        agent.tokenUser = agent.User
     }
 
     url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/system")
@@ -140,7 +149,7 @@ func (agent *Agent) GetSystem() (*SystemOverviewResponse, error) {
 
     req.Header.Set("User-Agent", agent.httpUserAgent)
     req.Header.Set("Accept", "application/json")
-    req.SetBasicAuth(agent.token, agent.User)
+    req.SetBasicAuth(agent.token, agent.tokenUser)
 
     res, getErr := agent.httpClient.Do(req)
     if getErr != nil {

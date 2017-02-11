@@ -14,6 +14,40 @@ const (
     testHTTPTimeout    int    = 2
 )
 
+func TestLoginVariant_SessionLogin_Success(t *testing.T) {
+    t.Log("Test trying to GetSystem (should success)")
+    testAgent := Agent{
+        Host:     testHost,
+        Port:     testPort,
+        User:     testLoginUsername,
+        Password: testLoginPassword,
+    }
+    sor, err := testAgent.GetSystem()
+    if err != nil {
+        t.Log(err)
+        t.Fail()
+    }
+
+    t.Log(sor)
+}
+
+func TestLoginVariant_SessionLogin_Fail(t *testing.T) {
+    t.Log("Test trying to GetSystem (should fail with 401)")
+    testAgent := Agent{
+        Host:     testHost,
+        Port:     testPort,
+        User:     testLoginUsername[:len(testLoginUsername)-1],
+        Password: testLoginPassword,
+    }
+    sor, err := testAgent.GetSystem()
+    if err != nil {
+        t.Log(err)
+        t.Fail()
+    }
+
+    t.Log(sor)
+}
+
 func TestLoginVariant_TokenLogin_Success(t *testing.T) {
     t.Log("Test trying to GetSystem (should success)")
     testAgent := Agent{
