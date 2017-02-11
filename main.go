@@ -26,7 +26,7 @@ func init() {
 
     agent = graylog.Agent{
         Host:     "127.0.0.1",
-        Port:     "9000",
+        Port:     9000,
         User:     "admin",
         Password: "admin",
     }

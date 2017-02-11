@@ -20,11 +20,11 @@ Agent is the main object
 */
 type Agent struct {
     Host     string
-    Port     string
+    Port     int
     User     string
     Password string
 
-    token loginResponse
+    token string
 
     httpClient    http.Client
     httpUserAgent string
@@ -60,7 +60,6 @@ type SystemOverviewResponse struct {
 Init to the agent
 */
 func (agent *Agent) Init(httpTimeout int) {
-
     if httpTimeout == 0 {
         httpTimeout = DefaultAgentHTTPTimeout
     }
@@ -73,49 +72,60 @@ func (agent *Agent) Init(httpTimeout int) {
     agent.PrettyResponse = true
 }
 
-func (agent *Agent) login() (*http.Response, error) {
+func (agent *Agent) login() error {
+    if agent.httpUserAgent == "" {
+        agent.Init(DefaultAgentHTTPTimeout)
+    }
 
     url := fmt.Sprintf("http://%v:%v/%v/%v/tokens/%v", agent.Host, agent.Port, "api/users", agent.User, agent.httpUserAgent)
+
     if agent.PrettyResponse {
         url = fmt.Sprintf("%v?pretty=true", url)
     }
 
     req, err := http.NewRequest(http.MethodPost, url, nil)
     if err != nil {
-        return nil, err
+        return err
     }
 
     req.SetBasicAuth(agent.User, agent.Password)
 
     res, getErr := agent.httpClient.Do(req)
     if getErr != nil {
-        return nil, err
+        return err
     }
 
     body, readErr := ioutil.ReadAll(res.Body)
     if readErr != nil {
-        return nil, readErr
+        return readErr
     }
     defer res.Body.Close()
 
     loginRes := loginResponse{}
     jsonErr := json.Unmarshal(body, &loginRes)
     if jsonErr != nil {
-        return nil, jsonErr
+        return jsonErr
     }
 
-    agent.token = loginRes
+    agent.token = loginRes.Token
 
-    return res, nil
+    return nil
 }
 
 /*
 GetSystem returns api/system response
 */
 func (agent *Agent) GetSystem() (*SystemOverviewResponse, error) {
+    if agent.httpUserAgent == "" {
+        agent.Init(DefaultAgentHTTPTimeout)
+    }
 
-    if agent.token.Token == "" {
-        agent.login()
+    if agent.User != "token" {
+        if agent.token == "" {
+            agent.login()
+        }
+    } else {
+        agent.token = agent.Password
     }
 
     url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/system")
@@ -130,10 +140,18 @@ func (agent *Agent) GetSystem() (*SystemOverviewResponse, error) {
 
     req.Header.Set("User-Agent", agent.httpUserAgent)
     req.Header.Set("Accept", "application/json")
-    req.SetBasicAuth(agent.token.Token, "token")
+    req.SetBasicAuth(agent.token, agent.User)
 
     res, getErr := agent.httpClient.Do(req)
     if getErr != nil {
+        return nil, err
+    }
+
+    if res.StatusCode != 200 {
+        err := CommonError{
+            Response: *res,
+            Request:  *req,
+        }
         return nil, err
     }
 
