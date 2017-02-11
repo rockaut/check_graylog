@@ -2,7 +2,7 @@ package main
 
 import (
     "fmt"
-    "github.com/rockaut/check_graylog/graylog"
+    "github.com/rockaut/check_graylog/pkg/graylog"
     "os"
     //"strconv"
 )
