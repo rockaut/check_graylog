@@ -41,29 +41,6 @@ type loginResponse struct {
 }
 
 /*
-ClusterResponse response
-*/
-type ClusterResponse map[string]SystemOverviewResponse
-
-/*
-SystemOverviewResponse urn:jsonschema:org:graylog2:rest:models:system:responses:SystemOverviewResponse
-*/
-type SystemOverviewResponse struct {
-    Facility       string `json:"facility"`
-    Codename       string `json:"codename"`
-    NodeID         string `json:"node_id"`
-    ClusterID      string `json:"cluster_id"`
-    Version        string `json:"version"`
-    StartedAt      string `json:"started_at"`
-    IsProcessing   bool   `json:"is_processing"`
-    Hostname       string `json:"hostname"`
-    Lifecycle      string `json:"lifecycle"`
-    LbStatus       string `json:"lb_status"`
-    Timezone       string `json:"timezone"`
-    OperatingSyste string `json:"operating_system"`
-}
-
-/*
 Init to the agent
 */
 func (agent *Agent) Init(httpTimeout int) {
@@ -177,61 +154,4 @@ func (agent *Agent) do(request *http.Request) ([]byte, *http.Response, error) {
     defer res.Body.Close()
 
     return body, res, nil
-}
-
-/*
-GetCluster return api/cluster response
-*/
-func (agent *Agent) GetCluster() (*ClusterResponse, error) {
-    url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/cluster")
-    if agent.PrettyResponse {
-        url = fmt.Sprintf("%v?pretty=true", url)
-    }
-
-    req, err := agent.newGetRequest(url)
-    if err != nil {
-        return nil, err
-    }
-
-    body, _, doErr := agent.do(req)
-    if doErr != nil {
-        return nil, doErr
-    }
-
-    cRes := ClusterResponse{}
-    jsonErr := json.Unmarshal(body, &cRes)
-
-    if jsonErr != nil {
-        return nil, jsonErr
-    }
-
-    return &cRes, nil
-}
-
-/*
-GetSystem returns api/system response
-*/
-func (agent *Agent) GetSystem() (*SystemOverviewResponse, error) {
-    url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/system")
-    if agent.PrettyResponse {
-        url = fmt.Sprintf("%v?pretty=true", url)
-    }
-
-    req, err := agent.newGetRequest(url)
-    if err != nil {
-        return nil, err
-    }
-
-    body, _, doErr := agent.do(req)
-    if doErr != nil {
-        return nil, doErr
-    }
-
-    sysRes := SystemOverviewResponse{}
-    jsonErr := json.Unmarshal(body, &sysRes)
-    if jsonErr != nil {
-        return nil, jsonErr
-    }
-
-    return &sysRes, nil
 }
