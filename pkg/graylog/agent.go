@@ -3,6 +3,7 @@ package graylog
 import (
     "bytes"
     "encoding/json"
+    "errors"
     "fmt"
     "io/ioutil"
     "net/http"
@@ -153,7 +154,10 @@ func (agent *Agent) GetSystem() (*SystemOverviewResponse, error) {
 
     res, getErr := agent.httpClient.Do(req)
     if getErr != nil {
-        return nil, err
+        return nil, getErr
+    }
+    if res == nil {
+        return nil, errors.New("No response")
     }
 
     if res.StatusCode != 200 {

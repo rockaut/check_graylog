@@ -23,7 +23,7 @@ func TestLoginVariant_SessionLogin_Success(t *testing.T) {
         Password: testLoginPassword,
     }
     sor, err := testAgent.GetSystem()
-    if err != nil {
+    if err != nil || sor == nil {
         t.Log(err)
         t.Fail()
     }
@@ -57,7 +57,7 @@ func TestLoginVariant_TokenLogin_Success(t *testing.T) {
         Password: testLoginToken,
     }
     sor, err := testAgent.GetSystem()
-    if err != nil || sor == nil {
+    if sor == nil || err != nil {
         t.Log(err)
         t.Fail()
     }
