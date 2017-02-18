@@ -26,8 +26,8 @@ type Agent struct {
     User     string
     Password string
 
-    token     string
-    tokenUser string
+    authKey  string
+    authUser string
 
     httpClient    http.Client
     httpUserAgent string
@@ -79,9 +79,19 @@ func (agent *Agent) Init(httpTimeout int) {
     agent.PrettyResponse = true
 }
 
-func (agent *Agent) login() error {
+func (agent *Agent) getAuth() error {
     if agent.httpUserAgent == "" {
         agent.Init(DefaultAgentHTTPTimeout)
+    }
+
+    if agent.User == "token" {
+        if agent.Password == "" {
+            return errors.New("no token provided")
+        }
+
+        agent.authKey = agent.Password
+        agent.authUser = "token"
+        return nil
     }
 
     url := fmt.Sprintf("http://%v:%v/api/system/sessions", agent.Host, agent.Port)
@@ -117,35 +127,18 @@ func (agent *Agent) login() error {
         return jsonErr
     }
 
-    agent.token = loginRes.SesionID
-    agent.tokenUser = "session"
+    agent.authKey = loginRes.SesionID
+    agent.authUser = "session"
 
     return nil
 }
 
-/*
-GetCluster return api/cluster response
-*/
-func (agent *Agent) GetCluster() (*ClusterResponse, error) {
-    if agent.httpUserAgent == "" {
-        agent.Init(DefaultAgentHTTPTimeout)
-    }
-
-    if agent.User != "token" {
-        if agent.token == "" {
-            err := agent.login()
-            if err != nil {
-                return nil, err
-            }
+func (agent *Agent) newGetRequest(url string) (*http.Request, error) {
+    if agent.authKey == "" || agent.authUser == "" {
+        err := agent.getAuth()
+        if err != nil {
+            return nil, err
         }
-    } else {
-        agent.token = agent.Password
-        agent.tokenUser = agent.User
-    }
-
-    url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/cluster")
-    if agent.PrettyResponse {
-        url = fmt.Sprintf("%v?pretty=true", url)
     }
 
     req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -155,29 +148,55 @@ func (agent *Agent) GetCluster() (*ClusterResponse, error) {
 
     req.Header.Set("User-Agent", agent.httpUserAgent)
     req.Header.Set("Accept", "application/json")
-    req.SetBasicAuth(agent.token, agent.tokenUser)
+    req.SetBasicAuth(agent.authKey, agent.authUser)
 
-    res, getErr := agent.httpClient.Do(req)
-    if getErr != nil {
-        return nil, getErr
+    return req, nil
+}
+
+func (agent *Agent) do(request *http.Request) ([]byte, *http.Response, error) {
+    res, doErr := agent.httpClient.Do(request)
+    if doErr != nil {
+        return nil, nil, doErr
     }
     if res == nil {
-        return nil, errors.New("No response")
+        return nil, nil, errors.New("no response")
     }
 
     if res.StatusCode != 200 {
         err := CommonError{
             Response: *res,
-            Request:  *req,
+            Request:  *request,
         }
-        return nil, err
+        return nil, nil, err
     }
 
     body, readErr := ioutil.ReadAll(res.Body)
     if readErr != nil {
-        return nil, readErr
+        return nil, nil, readErr
     }
     defer res.Body.Close()
+
+    return body, res, nil
+}
+
+/*
+GetCluster return api/cluster response
+*/
+func (agent *Agent) GetCluster() (*ClusterResponse, error) {
+    url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/cluster")
+    if agent.PrettyResponse {
+        url = fmt.Sprintf("%v?pretty=true", url)
+    }
+
+    req, err := agent.newGetRequest(url)
+    if err != nil {
+        return nil, err
+    }
+
+    body, _, doErr := agent.do(req)
+    if doErr != nil {
+        return nil, doErr
+    }
 
     cRes := ClusterResponse{}
     jsonErr := json.Unmarshal(body, &cRes)
@@ -193,57 +212,20 @@ func (agent *Agent) GetCluster() (*ClusterResponse, error) {
 GetSystem returns api/system response
 */
 func (agent *Agent) GetSystem() (*SystemOverviewResponse, error) {
-    if agent.httpUserAgent == "" {
-        agent.Init(DefaultAgentHTTPTimeout)
-    }
-
-    if agent.User != "token" {
-        if agent.token == "" {
-            err := agent.login()
-            if err != nil {
-                return nil, err
-            }
-        }
-    } else {
-        agent.token = agent.Password
-        agent.tokenUser = agent.User
-    }
-
     url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/system")
     if agent.PrettyResponse {
         url = fmt.Sprintf("%v?pretty=true", url)
     }
 
-    req, err := http.NewRequest(http.MethodGet, url, nil)
+    req, err := agent.newGetRequest(url)
     if err != nil {
         return nil, err
     }
 
-    req.Header.Set("User-Agent", agent.httpUserAgent)
-    req.Header.Set("Accept", "application/json")
-    req.SetBasicAuth(agent.token, agent.tokenUser)
-
-    res, getErr := agent.httpClient.Do(req)
-    if getErr != nil {
-        return nil, getErr
+    body, _, doErr := agent.do(req)
+    if doErr != nil {
+        return nil, doErr
     }
-    if res == nil {
-        return nil, errors.New("No response")
-    }
-
-    if res.StatusCode != 200 {
-        err := CommonError{
-            Response: *res,
-            Request:  *req,
-        }
-        return nil, err
-    }
-
-    body, readErr := ioutil.ReadAll(res.Body)
-    if readErr != nil {
-        return nil, readErr
-    }
-    defer res.Body.Close()
 
     sysRes := SystemOverviewResponse{}
     jsonErr := json.Unmarshal(body, &sysRes)
