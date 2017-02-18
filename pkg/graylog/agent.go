@@ -41,6 +41,11 @@ type loginResponse struct {
 }
 
 /*
+ClusterResponse response
+*/
+type ClusterResponse map[string]SystemOverviewResponse
+
+/*
 SystemOverviewResponse urn:jsonschema:org:graylog2:rest:models:system:responses:SystemOverviewResponse
 */
 type SystemOverviewResponse struct {
@@ -116,6 +121,72 @@ func (agent *Agent) login() error {
     agent.tokenUser = "session"
 
     return nil
+}
+
+/*
+GetCluster return api/cluster response
+*/
+func (agent *Agent) GetCluster() (*ClusterResponse, error) {
+    if agent.httpUserAgent == "" {
+        agent.Init(DefaultAgentHTTPTimeout)
+    }
+
+    if agent.User != "token" {
+        if agent.token == "" {
+            err := agent.login()
+            if err != nil {
+                return nil, err
+            }
+        }
+    } else {
+        agent.token = agent.Password
+        agent.tokenUser = agent.User
+    }
+
+    url := fmt.Sprintf("http://%v:%v/%v", agent.Host, agent.Port, "api/cluster")
+    if agent.PrettyResponse {
+        url = fmt.Sprintf("%v?pretty=true", url)
+    }
+
+    req, err := http.NewRequest(http.MethodGet, url, nil)
+    if err != nil {
+        return nil, err
+    }
+
+    req.Header.Set("User-Agent", agent.httpUserAgent)
+    req.Header.Set("Accept", "application/json")
+    req.SetBasicAuth(agent.token, agent.tokenUser)
+
+    res, getErr := agent.httpClient.Do(req)
+    if getErr != nil {
+        return nil, getErr
+    }
+    if res == nil {
+        return nil, errors.New("No response")
+    }
+
+    if res.StatusCode != 200 {
+        err := CommonError{
+            Response: *res,
+            Request:  *req,
+        }
+        return nil, err
+    }
+
+    body, readErr := ioutil.ReadAll(res.Body)
+    if readErr != nil {
+        return nil, readErr
+    }
+    defer res.Body.Close()
+
+    cRes := ClusterResponse{}
+    jsonErr := json.Unmarshal(body, &cRes)
+
+    if jsonErr != nil {
+        return nil, jsonErr
+    }
+
+    return &cRes, nil
 }
 
 /*

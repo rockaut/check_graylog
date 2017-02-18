@@ -40,7 +40,7 @@ func TestLoginVariant_SessionLogin_Fail(t *testing.T) {
         Password: testLoginPassword,
     }
     sor, err := testAgent.GetSystem()
-    if err != nil {
+    if err == nil {
         t.Log(err)
         t.Fail()
     }
@@ -80,4 +80,28 @@ func TestLoginVariant_TokenLogin_Fail(t *testing.T) {
     }
 
     t.Logf("sor: %v, %v", sor, err)
+}
+
+func TestGetData_Success(t *testing.T) {
+    t.Log("Testing data fetches")
+    testAgent := Agent{
+        Host:     testHost,
+        Port:     testPort,
+        User:     testLoginTokenUser,
+        Password: testLoginToken,
+    }
+
+    sor, err := testAgent.GetSystem()
+    if sor == nil || err != nil {
+        t.Log(sor)
+        t.Fail()
+    }
+    t.Logf("sor: %v, %v", sor, err)
+
+    cr, err := testAgent.GetCluster()
+    if cr == nil || err != nil {
+        t.Log(cr)
+        t.Fail()
+    }
+    t.Logf("cr: %v, %v", cr, err)
 }
